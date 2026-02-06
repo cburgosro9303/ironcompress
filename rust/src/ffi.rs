@@ -5,10 +5,7 @@ use crate::error;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn native_ping() -> i32 {
-    match catch_unwind(AssertUnwindSafe(|| 1i32)) {
-        Ok(v) => v,
-        Err(_) => error::PANIC_CAUGHT,
-    }
+    catch_unwind(AssertUnwindSafe(|| 1i32)).unwrap_or_else(|_| error::PANIC_CAUGHT)
 }
 
 /// Compress `in_len` bytes from `in_ptr` into the buffer at `out_ptr` (capacity `out_cap`).
@@ -24,12 +21,9 @@ pub extern "C" fn compress_native(
     out_cap: usize,
     out_len: *mut usize,
 ) -> i32 {
-    match catch_unwind(AssertUnwindSafe(|| {
+    catch_unwind(AssertUnwindSafe(|| {
         compress_native_inner(algo, level, in_ptr, in_len, out_ptr, out_cap, out_len)
-    })) {
-        Ok(code) => code,
-        Err(_) => error::PANIC_CAUGHT,
-    }
+    })).unwrap_or_else(|_| error::PANIC_CAUGHT)
 }
 
 fn compress_native_inner(
@@ -54,6 +48,57 @@ fn compress_native_inner(
     let output = unsafe { std::slice::from_raw_parts_mut(out_ptr, out_cap) };
 
     match compress::compress(compression_algo, level, input, output) {
+        Ok(n) => {
+            unsafe { *out_len = n };
+            error::SUCCESS
+        }
+        Err(e) => {
+            if let Some(needed) = e.needed_size() {
+                unsafe { *out_len = needed };
+            }
+            e.to_code()
+        }
+    }
+}
+
+/// Decompress `in_len` bytes from `in_ptr` into the buffer at `out_ptr` (capacity `out_cap`).
+/// On success, writes the number of bytes produced to `*out_len` and returns SUCCESS (0).
+/// On BUFFER_TOO_SMALL, writes the needed size hint to `*out_len` and returns -1.
+#[unsafe(no_mangle)]
+pub extern "C" fn decompress_native(
+    algo: u8,
+    in_ptr: *const u8,
+    in_len: usize,
+    out_ptr: *mut u8,
+    out_cap: usize,
+    out_len: *mut usize,
+) -> i32 {
+    catch_unwind(AssertUnwindSafe(|| {
+        decompress_native_inner(algo, in_ptr, in_len, out_ptr, out_cap, out_len)
+    })).unwrap_or_else(|_| error::PANIC_CAUGHT)
+}
+
+fn decompress_native_inner(
+    algo: u8,
+    in_ptr: *const u8,
+    in_len: usize,
+    out_ptr: *mut u8,
+    out_cap: usize,
+    out_len: *mut usize,
+) -> i32 {
+    if in_ptr.is_null() || out_ptr.is_null() || out_len.is_null() {
+        return error::INVALID_ARGUMENT;
+    }
+
+    let compression_algo = match CompressionAlgo::try_from(algo) {
+        Ok(a) => a,
+        Err(e) => return e.to_code(),
+    };
+
+    let input = unsafe { std::slice::from_raw_parts(in_ptr, in_len) };
+    let output = unsafe { std::slice::from_raw_parts_mut(out_ptr, out_cap) };
+
+    match compress::decompress(compression_algo, input, output) {
         Ok(n) => {
             unsafe { *out_len = n };
             error::SUCCESS
@@ -140,5 +185,47 @@ mod tests {
     #[test]
     fn estimate_unknown_algo_returns_zero() {
         assert_eq!(estimate_max_output_size_native(255, -1, 1000), 0);
+    }
+
+    #[test]
+    fn decompress_null_ptr_returns_invalid_argument() {
+        let mut out_len: usize = 0;
+        let mut out = [0u8; 64];
+
+        let result = decompress_native(
+            1,
+            std::ptr::null(), 10,
+            out.as_mut_ptr(), out.len(),
+            &mut out_len,
+        );
+        assert_eq!(result, error::INVALID_ARGUMENT);
+    }
+
+    #[test]
+    fn decompress_unknown_algo_returns_algo_not_found() {
+        let input = b"hello";
+        let mut out = [0u8; 64];
+        let mut out_len: usize = 0;
+        let result = decompress_native(
+            255,
+            input.as_ptr(), input.len(),
+            out.as_mut_ptr(), out.len(),
+            &mut out_len,
+        );
+        assert_eq!(result, error::ALGO_NOT_FOUND);
+    }
+
+    #[test]
+    fn decompress_invalid_data_returns_error() {
+        let input = b"hello";
+        let mut out = [0u8; 64];
+        let mut out_len: usize = 0;
+        let result = decompress_native(
+            1,
+            input.as_ptr(), input.len(),
+            out.as_mut_ptr(), out.len(),
+            &mut out_len,
+        );
+        assert_eq!(result, error::INTERNAL_ERROR);
     }
 }

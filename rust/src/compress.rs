@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{Read, Write};
 
 use crate::error::CompressError;
 
@@ -87,13 +87,11 @@ pub fn compress(
         CompressionAlgo::Snappy => compress_snappy(input, output),
         CompressionAlgo::Gzip => compress_gzip(input, output, level),
         CompressionAlgo::Deflate => compress_deflate(input, output, level),
-        CompressionAlgo::Zstd
-        | CompressionAlgo::Brotli
-        | CompressionAlgo::Lzma2
-        | CompressionAlgo::Bzip2
-        | CompressionAlgo::Lzf => Err(CompressError::Internal(format!(
-            "{algo:?} not yet implemented"
-        ))),
+        CompressionAlgo::Zstd => compress_zstd(input, output, level),
+        CompressionAlgo::Brotli => compress_brotli(input, output, level),
+        CompressionAlgo::Lzma2 => compress_lzma2(input, output),
+        CompressionAlgo::Bzip2 => compress_bzip2(input, output, level),
+        CompressionAlgo::Lzf => compress_lzf(input, output),
     }
 }
 
@@ -139,6 +137,234 @@ fn compress_deflate(input: &[u8], output: &mut [u8], level: i32) -> Result<usize
     }
     output[..compressed.len()].copy_from_slice(&compressed);
     Ok(compressed.len())
+}
+
+fn compress_lzf(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
+    // LZF returns NoCompressionPossible for very small/incompressible data.
+    // We prefix with a 1-byte flag: 0x01 = compressed, 0x00 = stored raw.
+    match lzf::compress(input) {
+        Ok(compressed) => {
+            let total = 1 + compressed.len();
+            if total > output.len() {
+                return Err(CompressError::BufferTooSmall { needed: total });
+            }
+            output[0] = 0x01; // compressed
+            output[1..total].copy_from_slice(&compressed);
+            Ok(total)
+        }
+        Err(lzf::LzfError::NoCompressionPossible) => {
+            let total = 1 + input.len();
+            if total > output.len() {
+                return Err(CompressError::BufferTooSmall { needed: total });
+            }
+            output[0] = 0x00; // raw
+            output[1..total].copy_from_slice(input);
+            Ok(total)
+        }
+        Err(e) => Err(CompressError::Internal(format!("LZF compress: {e:?}"))),
+    }
+}
+
+fn compress_lzma2(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
+    let mut compressed = Vec::new();
+    lzma_rs::lzma2_compress(&mut std::io::BufReader::new(input), &mut compressed)?;
+    if compressed.len() > output.len() {
+        return Err(CompressError::BufferTooSmall {
+            needed: compressed.len(),
+        });
+    }
+    output[..compressed.len()].copy_from_slice(&compressed);
+    Ok(compressed.len())
+}
+
+fn compress_bzip2(input: &[u8], output: &mut [u8], level: i32) -> Result<usize, CompressError> {
+    let mut encoder = bzip2::write::BzEncoder::new(
+        Vec::new(),
+        bzip2::Compression::new(level as u32),
+    );
+    encoder.write_all(input)?;
+    let compressed = encoder.finish()?;
+    if compressed.len() > output.len() {
+        return Err(CompressError::BufferTooSmall {
+            needed: compressed.len(),
+        });
+    }
+    output[..compressed.len()].copy_from_slice(&compressed);
+    Ok(compressed.len())
+}
+
+fn compress_zstd(input: &[u8], output: &mut [u8], level: i32) -> Result<usize, CompressError> {
+    let compressed = zstd::encode_all(input, level)?;
+    if compressed.len() > output.len() {
+        return Err(CompressError::BufferTooSmall {
+            needed: compressed.len(),
+        });
+    }
+    output[..compressed.len()].copy_from_slice(&compressed);
+    Ok(compressed.len())
+}
+
+fn compress_brotli(input: &[u8], output: &mut [u8], level: i32) -> Result<usize, CompressError> {
+    let mut compressed = Vec::new();
+    let params = brotli::enc::BrotliEncoderParams {
+        quality: level,
+        ..Default::default()
+    };
+    brotli::BrotliCompress(&mut &input[..], &mut compressed, &params)?;
+    if compressed.len() > output.len() {
+        return Err(CompressError::BufferTooSmall {
+            needed: compressed.len(),
+        });
+    }
+    output[..compressed.len()].copy_from_slice(&compressed);
+    Ok(compressed.len())
+}
+
+/// Decompress `input` into `output` using the given algorithm.
+/// Returns the number of bytes written to `output`.
+pub fn decompress(
+    algo: CompressionAlgo,
+    input: &[u8],
+    output: &mut [u8],
+) -> Result<usize, CompressError> {
+    match algo {
+        CompressionAlgo::Lz4 => decompress_lz4(input, output),
+        CompressionAlgo::Snappy => decompress_snappy(input, output),
+        CompressionAlgo::Gzip => decompress_gzip(input, output),
+        CompressionAlgo::Deflate => decompress_deflate(input, output),
+        CompressionAlgo::Zstd => decompress_zstd(input, output),
+        CompressionAlgo::Brotli => decompress_brotli(input, output),
+        CompressionAlgo::Lzma2 => decompress_lzma2(input, output),
+        CompressionAlgo::Bzip2 => decompress_bzip2(input, output),
+        CompressionAlgo::Lzf => decompress_lzf(input, output),
+    }
+}
+
+fn decompress_lz4(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
+    let decompressed = lz4_flex::block::decompress(input, output.len())
+        .map_err(|e| CompressError::Internal(e.to_string()))?;
+    if decompressed.len() > output.len() {
+        return Err(CompressError::BufferTooSmall {
+            needed: decompressed.len(),
+        });
+    }
+    output[..decompressed.len()].copy_from_slice(&decompressed);
+    Ok(decompressed.len())
+}
+
+fn decompress_snappy(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
+    let decompressed = snap::raw::Decoder::new().decompress_vec(input)?;
+    if decompressed.len() > output.len() {
+        return Err(CompressError::BufferTooSmall {
+            needed: decompressed.len(),
+        });
+    }
+    output[..decompressed.len()].copy_from_slice(&decompressed);
+    Ok(decompressed.len())
+}
+
+fn decompress_gzip(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
+    let mut decoder = flate2::read::GzDecoder::new(input);
+    let mut decompressed = Vec::new();
+    decoder.read_to_end(&mut decompressed)?;
+    if decompressed.len() > output.len() {
+        return Err(CompressError::BufferTooSmall {
+            needed: decompressed.len(),
+        });
+    }
+    output[..decompressed.len()].copy_from_slice(&decompressed);
+    Ok(decompressed.len())
+}
+
+fn decompress_deflate(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
+    let mut decoder = flate2::read::DeflateDecoder::new(input);
+    let mut decompressed = Vec::new();
+    decoder.read_to_end(&mut decompressed)?;
+    if decompressed.len() > output.len() {
+        return Err(CompressError::BufferTooSmall {
+            needed: decompressed.len(),
+        });
+    }
+    output[..decompressed.len()].copy_from_slice(&decompressed);
+    Ok(decompressed.len())
+}
+
+fn decompress_zstd(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
+    let decompressed = zstd::decode_all(input)?;
+    if decompressed.len() > output.len() {
+        return Err(CompressError::BufferTooSmall {
+            needed: decompressed.len(),
+        });
+    }
+    output[..decompressed.len()].copy_from_slice(&decompressed);
+    Ok(decompressed.len())
+}
+
+fn decompress_brotli(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
+    let mut decompressed = Vec::new();
+    brotli::BrotliDecompress(&mut &input[..], &mut decompressed)?;
+    if decompressed.len() > output.len() {
+        return Err(CompressError::BufferTooSmall {
+            needed: decompressed.len(),
+        });
+    }
+    output[..decompressed.len()].copy_from_slice(&decompressed);
+    Ok(decompressed.len())
+}
+
+fn decompress_lzma2(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
+    let mut decompressed = Vec::new();
+    lzma_rs::lzma2_decompress(&mut std::io::BufReader::new(input), &mut decompressed)
+        .map_err(|e| CompressError::Internal(e.to_string()))?;
+    if decompressed.len() > output.len() {
+        return Err(CompressError::BufferTooSmall {
+            needed: decompressed.len(),
+        });
+    }
+    output[..decompressed.len()].copy_from_slice(&decompressed);
+    Ok(decompressed.len())
+}
+
+fn decompress_bzip2(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
+    let mut decoder = bzip2::read::BzDecoder::new(input);
+    let mut decompressed = Vec::new();
+    decoder.read_to_end(&mut decompressed)?;
+    if decompressed.len() > output.len() {
+        return Err(CompressError::BufferTooSmall {
+            needed: decompressed.len(),
+        });
+    }
+    output[..decompressed.len()].copy_from_slice(&decompressed);
+    Ok(decompressed.len())
+}
+
+fn decompress_lzf(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
+    if input.is_empty() {
+        return Err(CompressError::Internal("LZF decompress: empty input".into()));
+    }
+    let flag = input[0];
+    let payload = &input[1..];
+    match flag {
+        0x00 => {
+            // Raw stored data
+            if payload.len() > output.len() {
+                return Err(CompressError::BufferTooSmall { needed: payload.len() });
+            }
+            output[..payload.len()].copy_from_slice(payload);
+            Ok(payload.len())
+        }
+        0x01 => {
+            // LZF compressed data
+            let decompressed = lzf::decompress(payload, output.len())
+                .map_err(|e| CompressError::Internal(format!("LZF decompress: {e:?}")))?;
+            if decompressed.len() > output.len() {
+                return Err(CompressError::BufferTooSmall { needed: decompressed.len() });
+            }
+            output[..decompressed.len()].copy_from_slice(&decompressed);
+            Ok(decompressed.len())
+        }
+        _ => Err(CompressError::Internal(format!("LZF decompress: unknown flag {flag}"))),
+    }
 }
 
 /// Conservative estimate of maximum output size for a given algorithm and input length.
@@ -224,13 +450,153 @@ mod tests {
     }
 
     #[test]
-    fn stub_algorithms_return_internal_error() {
-        let input = b"test";
-        let mut out = vec![0u8; 256];
-        for id in [3u8, 5, 6, 7, 8] {
-            let algo = CompressionAlgo::try_from(id).unwrap();
-            let err = compress(algo, -1, input, &mut out).unwrap_err();
-            assert_eq!(err.to_code(), crate::error::INTERNAL_ERROR);
-        }
+    fn lzf_roundtrip() {
+        let input = make_test_data();
+        let max = estimate_max_output_size(CompressionAlgo::Lzf, 0, input.len());
+        let mut compressed = vec![0u8; max];
+        let n = compress(CompressionAlgo::Lzf, 0, &input, &mut compressed).unwrap();
+        assert!(n > 0);
+        let mut decompressed = vec![0u8; input.len()];
+        let m = decompress(CompressionAlgo::Lzf, &compressed[..n], &mut decompressed).unwrap();
+        assert_eq!(m, input.len());
+        assert_eq!(&decompressed[..m], &input[..]);
+    }
+
+    #[test]
+    fn lzf_single_byte_roundtrip() {
+        let input = vec![42u8];
+        let max = estimate_max_output_size(CompressionAlgo::Lzf, 0, input.len());
+        let mut compressed = vec![0u8; max];
+        let n = compress(CompressionAlgo::Lzf, 0, &input, &mut compressed).unwrap();
+        assert!(n > 0);
+        let mut decompressed = vec![0u8; input.len()];
+        let m = decompress(CompressionAlgo::Lzf, &compressed[..n], &mut decompressed).unwrap();
+        assert_eq!(m, input.len());
+        assert_eq!(&decompressed[..m], &input[..]);
+    }
+
+    #[test]
+    fn lzf_random_roundtrip() {
+        let input: Vec<u8> = (0..1024).map(|i| ((i * 37 + 13) % 256) as u8).collect();
+        let max = estimate_max_output_size(CompressionAlgo::Lzf, 0, input.len());
+        let mut compressed = vec![0u8; max];
+        let n = compress(CompressionAlgo::Lzf, 0, &input, &mut compressed).unwrap();
+        assert!(n > 0);
+        let mut decompressed = vec![0u8; input.len()];
+        let m = decompress(CompressionAlgo::Lzf, &compressed[..n], &mut decompressed).unwrap();
+        assert_eq!(m, input.len());
+        assert_eq!(&decompressed[..m], &input[..]);
+    }
+
+    #[test]
+    fn lz4_decompress_roundtrip() {
+        let input = make_test_data();
+        let max = lz4_flex::block::get_maximum_output_size(input.len());
+        let mut compressed = vec![0u8; max];
+        let n = compress(CompressionAlgo::Lz4, -1, &input, &mut compressed).unwrap();
+        let mut decompressed = vec![0u8; input.len()];
+        let m = decompress(CompressionAlgo::Lz4, &compressed[..n], &mut decompressed).unwrap();
+        assert_eq!(m, input.len());
+        assert_eq!(&decompressed[..m], &input[..]);
+    }
+
+    #[test]
+    fn snappy_decompress_roundtrip() {
+        let input = make_test_data();
+        let max = snap::raw::max_compress_len(input.len());
+        let mut compressed = vec![0u8; max];
+        let n = compress(CompressionAlgo::Snappy, -1, &input, &mut compressed).unwrap();
+        let mut decompressed = vec![0u8; input.len()];
+        let m = decompress(CompressionAlgo::Snappy, &compressed[..n], &mut decompressed).unwrap();
+        assert_eq!(m, input.len());
+        assert_eq!(&decompressed[..m], &input[..]);
+    }
+
+    #[test]
+    fn gzip_decompress_roundtrip() {
+        let input = make_test_data();
+        let max = estimate_max_output_size(CompressionAlgo::Gzip, 6, input.len());
+        let mut compressed = vec![0u8; max];
+        let n = compress(CompressionAlgo::Gzip, 6, &input, &mut compressed).unwrap();
+        let mut decompressed = vec![0u8; input.len()];
+        let m = decompress(CompressionAlgo::Gzip, &compressed[..n], &mut decompressed).unwrap();
+        assert_eq!(m, input.len());
+        assert_eq!(&decompressed[..m], &input[..]);
+    }
+
+    #[test]
+    fn deflate_decompress_roundtrip() {
+        let input = make_test_data();
+        let max = estimate_max_output_size(CompressionAlgo::Deflate, 6, input.len());
+        let mut compressed = vec![0u8; max];
+        let n = compress(CompressionAlgo::Deflate, 6, &input, &mut compressed).unwrap();
+        let mut decompressed = vec![0u8; input.len()];
+        let m = decompress(CompressionAlgo::Deflate, &compressed[..n], &mut decompressed).unwrap();
+        assert_eq!(m, input.len());
+        assert_eq!(&decompressed[..m], &input[..]);
+    }
+
+    #[test]
+    fn lzma2_roundtrip() {
+        let input = make_test_data();
+        let max = estimate_max_output_size(CompressionAlgo::Lzma2, 6, input.len());
+        let mut compressed = vec![0u8; max];
+        let n = compress(CompressionAlgo::Lzma2, 6, &input, &mut compressed).unwrap();
+        assert!(n > 0);
+        let mut decompressed = vec![0u8; input.len()];
+        let m = decompress(CompressionAlgo::Lzma2, &compressed[..n], &mut decompressed).unwrap();
+        assert_eq!(m, input.len());
+        assert_eq!(&decompressed[..m], &input[..]);
+    }
+
+    #[test]
+    fn bzip2_roundtrip() {
+        let input = make_test_data();
+        let max = estimate_max_output_size(CompressionAlgo::Bzip2, 6, input.len());
+        let mut compressed = vec![0u8; max];
+        let n = compress(CompressionAlgo::Bzip2, 6, &input, &mut compressed).unwrap();
+        assert!(n < input.len());
+        let mut decompressed = vec![0u8; input.len()];
+        let m = decompress(CompressionAlgo::Bzip2, &compressed[..n], &mut decompressed).unwrap();
+        assert_eq!(m, input.len());
+        assert_eq!(&decompressed[..m], &input[..]);
+    }
+
+    #[test]
+    fn brotli_roundtrip() {
+        let input = make_test_data();
+        let max = estimate_max_output_size(CompressionAlgo::Brotli, 6, input.len());
+        let mut compressed = vec![0u8; max];
+        let n = compress(CompressionAlgo::Brotli, 6, &input, &mut compressed).unwrap();
+        assert!(n < input.len());
+        let mut decompressed = vec![0u8; input.len()];
+        let m = decompress(CompressionAlgo::Brotli, &compressed[..n], &mut decompressed).unwrap();
+        assert_eq!(m, input.len());
+        assert_eq!(&decompressed[..m], &input[..]);
+    }
+
+    #[test]
+    fn zstd_roundtrip() {
+        let input = make_test_data();
+        let max = estimate_max_output_size(CompressionAlgo::Zstd, 3, input.len());
+        let mut compressed = vec![0u8; max];
+        let n = compress(CompressionAlgo::Zstd, 3, &input, &mut compressed).unwrap();
+        assert!(n < input.len());
+        let mut decompressed = vec![0u8; input.len()];
+        let m = decompress(CompressionAlgo::Zstd, &compressed[..n], &mut decompressed).unwrap();
+        assert_eq!(m, input.len());
+        assert_eq!(&decompressed[..m], &input[..]);
+    }
+
+    #[test]
+    fn decompress_buffer_too_small() {
+        let input = make_test_data();
+        let max = lz4_flex::block::get_maximum_output_size(input.len());
+        let mut compressed = vec![0u8; max];
+        let n = compress(CompressionAlgo::Lz4, -1, &input, &mut compressed).unwrap();
+        let mut tiny = vec![0u8; 4];
+        let err = decompress(CompressionAlgo::Lz4, &compressed[..n], &mut tiny).unwrap_err();
+        // LZ4 decompress with too-small output should fail
+        assert!(err.to_code() == crate::error::INTERNAL_ERROR || err.to_code() == crate::error::BUFFER_TOO_SMALL);
     }
 }

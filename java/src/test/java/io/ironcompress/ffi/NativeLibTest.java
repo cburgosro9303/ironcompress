@@ -1,4 +1,4 @@
-package io.ironcompress;
+package io.ironcompress.ffi;
 
 import org.junit.jupiter.api.Test;
 
@@ -9,9 +9,14 @@ import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class CompressNativeTest {
+class NativeLibTest {
 
     private static final byte LZ4 = 1;
+
+    @Test
+    void pingReturnsOne() {
+        assertEquals(1, NativeLib.nativePing());
+    }
 
     @Test
     void lz4CompressSuccess() {
@@ -49,7 +54,7 @@ class CompressNativeTest {
             MemorySegment inSeg = arena.allocate(input.length);
             inSeg.copyFrom(MemorySegment.ofArray(input));
 
-            MemorySegment outSeg = arena.allocate(4); // too small
+            MemorySegment outSeg = arena.allocate(4);
             MemorySegment outLen = arena.allocate(ValueLayout.JAVA_LONG);
 
             int result = NativeLib.compressNative(
@@ -83,6 +88,27 @@ class CompressNativeTest {
                     outLen);
 
             assertEquals(-2, result, "should return ALGO_NOT_FOUND (-2)");
+        }
+    }
+
+    @Test
+    void decompressInvalidDataReturnsInternalError() {
+        byte[] input = "test".getBytes(StandardCharsets.UTF_8);
+
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment inSeg = arena.allocate(input.length);
+            inSeg.copyFrom(MemorySegment.ofArray(input));
+
+            MemorySegment outSeg = arena.allocate(256);
+            MemorySegment outLen = arena.allocate(ValueLayout.JAVA_LONG);
+
+            int result = NativeLib.decompressNative(
+                    LZ4,
+                    inSeg, input.length,
+                    outSeg, 256,
+                    outLen);
+
+            assertEquals(-50, result, "should return INTERNAL_ERROR (-50)");
         }
     }
 
