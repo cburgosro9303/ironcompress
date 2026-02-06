@@ -8,14 +8,16 @@ crate-type = ["cdylib"]
 
 [profile.release]
 panic = "unwind"
-lto = "thin"
+lto = "fat"
+codegen-units = 1
+opt-level = 3
 
 [dependencies]
 lz4_flex = "0.12.0"
 snap = "1.1"
 flate2 = "1.1"
 brotli = "8.0"
-lzma-rs = "0.3"
+xz2 = "0.1"
 bzip2 = { version = "0.6.1", default-features = false, features = ["bzip2-sys"] }
 zstd = "0.13"
 lzf = "1.0"

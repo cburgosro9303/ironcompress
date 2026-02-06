@@ -1,4 +1,4 @@
-use std::io::{Read, Write};
+use std::io::{Cursor, Read, Write};
 
 use crate::error::CompressError;
 
@@ -45,29 +45,29 @@ fn clamp_level(algo: CompressionAlgo, level: i32) -> i32 {
         CompressionAlgo::Snappy => 0,
         // Zstd: 1-22, default 3
         CompressionAlgo::Zstd => {
-            if level < 0 { 3 } else { level.clamp(1, 22) }
+            if level <= 0 { 3 } else { level.clamp(1, 22) }
         }
-        // Gzip: 0-9, default 6
+        // Gzip: 1-9, default 6 (flate2 level 0 = no compression)
         CompressionAlgo::Gzip => {
-            if level < 0 { 6 } else { level.clamp(0, 9) }
+            if level <= 0 { 6 } else { level.clamp(1, 9) }
         }
-        // Brotli: 0-11, default 6
+        // Brotli: 1-11, default 6 (level 0 = nearly no compression)
         CompressionAlgo::Brotli => {
-            if level < 0 { 6 } else { level.clamp(0, 11) }
+            if level <= 0 { 6 } else { level.clamp(1, 11) }
         }
-        // LZMA2: 0-9, default 6
+        // LZMA2: 1-9, default 6
         CompressionAlgo::Lzma2 => {
-            if level < 0 { 6 } else { level.clamp(0, 9) }
+            if level <= 0 { 6 } else { level.clamp(1, 9) }
         }
-        // Bzip2: 1-9, default 6
+        // Bzip2: 1-9, default 6 (level = block size in 100KB units)
         CompressionAlgo::Bzip2 => {
-            if level < 0 { 6 } else { level.clamp(1, 9) }
+            if level <= 0 { 6 } else { level.clamp(1, 9) }
         }
         // LZF has no level control.
         CompressionAlgo::Lzf => 0,
-        // Deflate: 0-9, default 6
+        // Deflate: 1-9, default 6 (flate2 level 0 = no compression)
         CompressionAlgo::Deflate => {
-            if level < 0 { 6 } else { level.clamp(0, 9) }
+            if level <= 0 { 6 } else { level.clamp(1, 9) }
         }
     }
 }
@@ -89,7 +89,7 @@ pub fn compress(
         CompressionAlgo::Deflate => compress_deflate(input, output, level),
         CompressionAlgo::Zstd => compress_zstd(input, output, level),
         CompressionAlgo::Brotli => compress_brotli(input, output, level),
-        CompressionAlgo::Lzma2 => compress_lzma2(input, output),
+        CompressionAlgo::Lzma2 => compress_lzma2(input, output, level),
         CompressionAlgo::Bzip2 => compress_bzip2(input, output, level),
         CompressionAlgo::Lzf => compress_lzf(input, output),
     }
@@ -112,31 +112,21 @@ fn compress_snappy(input: &[u8], output: &mut [u8]) -> Result<usize, CompressErr
 }
 
 fn compress_gzip(input: &[u8], output: &mut [u8], level: i32) -> Result<usize, CompressError> {
+    let cursor = Cursor::new(output);
     let mut encoder =
-        flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::new(level as u32));
+        flate2::write::GzEncoder::new(cursor, flate2::Compression::new(level as u32));
     encoder.write_all(input)?;
-    let compressed = encoder.finish()?;
-    if compressed.len() > output.len() {
-        return Err(CompressError::BufferTooSmall {
-            needed: compressed.len(),
-        });
-    }
-    output[..compressed.len()].copy_from_slice(&compressed);
-    Ok(compressed.len())
+    let cursor = encoder.finish()?;
+    Ok(cursor.position() as usize)
 }
 
 fn compress_deflate(input: &[u8], output: &mut [u8], level: i32) -> Result<usize, CompressError> {
+    let cursor = Cursor::new(output);
     let mut encoder =
-        flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::new(level as u32));
+        flate2::write::DeflateEncoder::new(cursor, flate2::Compression::new(level as u32));
     encoder.write_all(input)?;
-    let compressed = encoder.finish()?;
-    if compressed.len() > output.len() {
-        return Err(CompressError::BufferTooSmall {
-            needed: compressed.len(),
-        });
-    }
-    output[..compressed.len()].copy_from_slice(&compressed);
-    Ok(compressed.len())
+    let cursor = encoder.finish()?;
+    Ok(cursor.position() as usize)
 }
 
 fn compress_lzf(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
@@ -165,59 +155,60 @@ fn compress_lzf(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError>
     }
 }
 
-fn compress_lzma2(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
-    let mut compressed = Vec::new();
-    lzma_rs::lzma2_compress(&mut std::io::BufReader::new(input), &mut compressed)?;
-    if compressed.len() > output.len() {
-        return Err(CompressError::BufferTooSmall {
-            needed: compressed.len(),
-        });
-    }
-    output[..compressed.len()].copy_from_slice(&compressed);
-    Ok(compressed.len())
+fn compress_lzma2(input: &[u8], output: &mut [u8], level: i32) -> Result<usize, CompressError> {
+    let cursor = Cursor::new(output);
+    let mut encoder = xz2::write::XzEncoder::new(cursor, level as u32);
+    encoder.write_all(input)?;
+    let cursor = encoder.finish()?;
+    Ok(cursor.position() as usize)
 }
 
 fn compress_bzip2(input: &[u8], output: &mut [u8], level: i32) -> Result<usize, CompressError> {
+    let cursor = Cursor::new(output);
     let mut encoder = bzip2::write::BzEncoder::new(
-        Vec::new(),
+        cursor,
         bzip2::Compression::new(level as u32),
     );
     encoder.write_all(input)?;
-    let compressed = encoder.finish()?;
-    if compressed.len() > output.len() {
-        return Err(CompressError::BufferTooSmall {
-            needed: compressed.len(),
-        });
-    }
-    output[..compressed.len()].copy_from_slice(&compressed);
-    Ok(compressed.len())
+    let cursor = encoder.finish()?;
+    Ok(cursor.position() as usize)
 }
 
 fn compress_zstd(input: &[u8], output: &mut [u8], level: i32) -> Result<usize, CompressError> {
-    let compressed = zstd::encode_all(input, level)?;
-    if compressed.len() > output.len() {
-        return Err(CompressError::BufferTooSmall {
-            needed: compressed.len(),
-        });
-    }
-    output[..compressed.len()].copy_from_slice(&compressed);
-    Ok(compressed.len())
+    let mut compressor = zstd::bulk::Compressor::new(level)?;
+    let n = compressor.compress_to_buffer(input, output)?;
+    Ok(n)
 }
 
 fn compress_brotli(input: &[u8], output: &mut [u8], level: i32) -> Result<usize, CompressError> {
-    let mut compressed = Vec::new();
+    let mut cursor = Cursor::new(output);
     let params = brotli::enc::BrotliEncoderParams {
         quality: level,
         ..Default::default()
     };
-    brotli::BrotliCompress(&mut &input[..], &mut compressed, &params)?;
-    if compressed.len() > output.len() {
-        return Err(CompressError::BufferTooSmall {
-            needed: compressed.len(),
-        });
+    brotli::BrotliCompress(&mut &input[..], &mut cursor, &params)?;
+    Ok(cursor.position() as usize)
+}
+
+/// Read from a decoder directly into the output buffer, avoiding intermediate Vec allocation.
+fn read_to_buffer(reader: &mut impl Read, output: &mut [u8]) -> Result<usize, CompressError> {
+    let mut total = 0;
+    loop {
+        if total >= output.len() {
+            // Buffer full — check if decoder has more data
+            let mut probe = [0u8; 1];
+            return match reader.read(&mut probe) {
+                Ok(0) => Ok(total),
+                Ok(_) => Err(CompressError::BufferTooSmall { needed: total + 1 }),
+                Err(e) => Err(e.into()),
+            };
+        }
+        match reader.read(&mut output[total..]) {
+            Ok(0) => return Ok(total),
+            Ok(n) => total += n,
+            Err(e) => return Err(e.into()),
+        }
     }
-    output[..compressed.len()].copy_from_slice(&compressed);
-    Ok(compressed.len())
 }
 
 /// Decompress `input` into `output` using the given algorithm.
@@ -241,101 +232,45 @@ pub fn decompress(
 }
 
 fn decompress_lz4(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
-    let decompressed = lz4_flex::block::decompress(input, output.len())
-        .map_err(|e| CompressError::Internal(e.to_string()))?;
-    if decompressed.len() > output.len() {
-        return Err(CompressError::BufferTooSmall {
-            needed: decompressed.len(),
-        });
-    }
-    output[..decompressed.len()].copy_from_slice(&decompressed);
-    Ok(decompressed.len())
+    lz4_flex::block::decompress_into(input, output)
+        .map_err(|e| CompressError::Internal(e.to_string()))
 }
 
 fn decompress_snappy(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
-    let decompressed = snap::raw::Decoder::new().decompress_vec(input)?;
-    if decompressed.len() > output.len() {
-        return Err(CompressError::BufferTooSmall {
-            needed: decompressed.len(),
-        });
-    }
-    output[..decompressed.len()].copy_from_slice(&decompressed);
-    Ok(decompressed.len())
+    let n = snap::raw::Decoder::new().decompress(input, output)?;
+    Ok(n)
 }
 
 fn decompress_gzip(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
     let mut decoder = flate2::read::GzDecoder::new(input);
-    let mut decompressed = Vec::new();
-    decoder.read_to_end(&mut decompressed)?;
-    if decompressed.len() > output.len() {
-        return Err(CompressError::BufferTooSmall {
-            needed: decompressed.len(),
-        });
-    }
-    output[..decompressed.len()].copy_from_slice(&decompressed);
-    Ok(decompressed.len())
+    read_to_buffer(&mut decoder, output)
 }
 
 fn decompress_deflate(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
     let mut decoder = flate2::read::DeflateDecoder::new(input);
-    let mut decompressed = Vec::new();
-    decoder.read_to_end(&mut decompressed)?;
-    if decompressed.len() > output.len() {
-        return Err(CompressError::BufferTooSmall {
-            needed: decompressed.len(),
-        });
-    }
-    output[..decompressed.len()].copy_from_slice(&decompressed);
-    Ok(decompressed.len())
+    read_to_buffer(&mut decoder, output)
 }
 
 fn decompress_zstd(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
-    let decompressed = zstd::decode_all(input)?;
-    if decompressed.len() > output.len() {
-        return Err(CompressError::BufferTooSmall {
-            needed: decompressed.len(),
-        });
-    }
-    output[..decompressed.len()].copy_from_slice(&decompressed);
-    Ok(decompressed.len())
+    let mut decompressor = zstd::bulk::Decompressor::new()?;
+    let n = decompressor.decompress_to_buffer(input, output)?;
+    Ok(n)
 }
 
 fn decompress_brotli(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
-    let mut decompressed = Vec::new();
-    brotli::BrotliDecompress(&mut &input[..], &mut decompressed)?;
-    if decompressed.len() > output.len() {
-        return Err(CompressError::BufferTooSmall {
-            needed: decompressed.len(),
-        });
-    }
-    output[..decompressed.len()].copy_from_slice(&decompressed);
-    Ok(decompressed.len())
+    let mut cursor = Cursor::new(output);
+    brotli::BrotliDecompress(&mut &input[..], &mut cursor)?;
+    Ok(cursor.position() as usize)
 }
 
 fn decompress_lzma2(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
-    let mut decompressed = Vec::new();
-    lzma_rs::lzma2_decompress(&mut std::io::BufReader::new(input), &mut decompressed)
-        .map_err(|e| CompressError::Internal(e.to_string()))?;
-    if decompressed.len() > output.len() {
-        return Err(CompressError::BufferTooSmall {
-            needed: decompressed.len(),
-        });
-    }
-    output[..decompressed.len()].copy_from_slice(&decompressed);
-    Ok(decompressed.len())
+    let mut decoder = xz2::read::XzDecoder::new(input);
+    read_to_buffer(&mut decoder, output)
 }
 
 fn decompress_bzip2(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
     let mut decoder = bzip2::read::BzDecoder::new(input);
-    let mut decompressed = Vec::new();
-    decoder.read_to_end(&mut decompressed)?;
-    if decompressed.len() > output.len() {
-        return Err(CompressError::BufferTooSmall {
-            needed: decompressed.len(),
-        });
-    }
-    output[..decompressed.len()].copy_from_slice(&decompressed);
-    Ok(decompressed.len())
+    read_to_buffer(&mut decoder, output)
 }
 
 fn decompress_lzf(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {

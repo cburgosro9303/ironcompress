@@ -8,6 +8,13 @@ java/gradle/
 java/gradlew
 java/gradlew.bat
 
+# Benchmark / Gradle
+benchmark/.gradle/
+benchmark/build/
+benchmark/gradle/
+benchmark/gradlew
+benchmark/gradlew.bat
+
 # IDE
 .idea/
 *.iml
@@ -18,3 +25,6 @@ java/gradlew.bat
 # OS
 .DS_Store
 Thumbs.db
+
+# Test data
+benchmark/testdata/
