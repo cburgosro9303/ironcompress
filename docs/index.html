@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IronCompress — Multi-Algorithm Compression for Java, Powered by Rust</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-card: #1c2128;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --accent: #f0883e;
+  --accent-light: #f5a623;
+  --green: #3fb950;
+  --red: #f85149;
+  --blue: #58a6ff;
+  --purple: #bc8cff;
+  --radius: 8px;
+  --max-width: 1100px;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #ffffff;
+    --bg-secondary: #f6f8fa;
+    --bg-card: #ffffff;
+    --border: #d0d7de;
+    --text: #1f2328;
+    --text-muted: #656d76;
+    --accent: #d15700;
+    --accent-light: #bf5700;
+    --green: #1a7f37;
+    --red: #cf222e;
+    --blue: #0969da;
+    --purple: #8250df;
+  }
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.container { max-width: var(--max-width); margin: 0 auto; padding: 0 24px; }
+
+/* Hero */
+.hero {
+  text-align: center;
+  padding: 80px 24px 60px;
+  background: linear-gradient(135deg, var(--bg) 0%, var(--bg-secondary) 100%);
+  border-bottom: 1px solid var(--border);
+}
+.hero h1 {
+  font-size: 3rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 12px;
+}
+.hero h1 span { color: var(--accent); }
+.hero .tagline {
+  font-size: 1.25rem;
+  color: var(--text-muted);
+  max-width: 600px;
+  margin: 0 auto 32px;
+}
+.stats {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  flex-wrap: wrap;
+  margin-bottom: 32px;
+}
+.stat { text-align: center; }
+.stat .value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.stat .label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.btn {
+  display: inline-block;
+  padding: 12px 28px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 1rem;
+  transition: opacity 0.2s;
+}
+.btn:hover { opacity: 0.9; text-decoration: none; }
+
+/* Sections */
+section { padding: 60px 0; }
+section:nth-child(even) { background: var(--bg-secondary); }
+.section-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 12px;
+}
+.section-subtitle {
+  text-align: center;
+  color: var(--text-muted);
+  margin-bottom: 40px;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Architecture */
+.arch-flow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  flex-wrap: wrap;
+  margin: 0 auto;
+  max-width: 800px;
+}
+.arch-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px 32px;
+  text-align: center;
+  min-width: 200px;
+}
+.arch-box h3 { font-size: 1.1rem; margin-bottom: 8px; }
+.arch-box p { font-size: 0.85rem; color: var(--text-muted); }
+.arch-arrow {
+  font-size: 2rem;
+  color: var(--accent);
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+
+/* Algo cards */
+.algo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+.algo-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+.algo-card h3 { font-size: 1.1rem; margin-bottom: 8px; }
+.algo-card .crate {
+  display: inline-block;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.8rem;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.algo-card .meta {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* Tables */
+.table-wrapper { overflow-x: auto; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+th, td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+th {
+  background: var(--bg-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+td.num { text-align: right; font-family: 'SFMono-Regular', Consolas, monospace; }
+tr:hover { background: var(--bg-secondary); }
+.winner { color: var(--green); font-weight: 600; }
+.loser { color: var(--text-muted); }
+
+/* Code */
+.code-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 0;
+}
+.code-tab {
+  padding: 8px 20px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.code-tab.active {
+  background: var(--bg-card);
+  color: var(--text);
+  font-weight: 600;
+}
+pre {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 0 var(--radius) var(--radius) var(--radius);
+  padding: 20px;
+  overflow-x: auto;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+.code-panel { display: none; }
+.code-panel.active { display: block; }
+
+/* Compat */
+.compat-yes { color: var(--green); font-weight: 600; }
+.compat-no { color: var(--red); font-weight: 600; }
+
+/* Footer */
+footer {
+  text-align: center;
+  padding: 40px 24px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+footer a { color: var(--text-muted); }
+
+@media (max-width: 640px) {
+  .hero h1 { font-size: 2rem; }
+  .stats { gap: 24px; }
+  .arch-flow { flex-direction: column; }
+  .arch-arrow { transform: rotate(90deg); padding: 8px 0; }
+  .algo-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="container">
+    <h1>Iron<span>Compress</span></h1>
+    <p class="tagline">Multi-algorithm compression for Java, powered by Rust via FFM. No JNI, no preview flags, just speed.</p>
+    <div class="stats">
+      <div class="stat"><div class="value">9</div><div class="label">Algorithms</div></div>
+      <div class="stat"><div class="value">0</div><div class="label">JNI Code</div></div>
+      <div class="stat"><div class="value">15x</div><div class="label">Faster Brotli</div></div>
+      <div class="stat"><div class="value">4x</div><div class="label">Faster Deflate</div></div>
+    </div>
+    <a href="https://github.com/cburgosro9303/ironcompress" class="btn">View on GitHub</a>
+  </div>
+</div>
+
+<!-- Architecture -->
+<section>
+  <div class="container">
+    <h2 class="section-title">Architecture</h2>
+    <p class="section-subtitle">Java calls Rust directly through FFM downcall handles. No JNI wrappers, no generated code, no <code>--enable-preview</code>.</p>
+    <div class="arch-flow">
+      <div class="arch-box">
+        <h3>Java Application</h3>
+        <p>IronCompress API<br>MemorySegment (Arena)<br>Off-heap allocation</p>
+      </div>
+      <div class="arch-arrow">&rarr;</div>
+      <div class="arch-box" style="border-color: var(--accent);">
+        <h3>FFM Downcall</h3>
+        <p>Linker.downcallHandle()<br>Zero-copy MemorySegment<br>No byte[] marshalling</p>
+      </div>
+      <div class="arch-arrow">&rarr;</div>
+      <div class="arch-box">
+        <h3>Rust cdylib</h3>
+        <p>catch_unwind firewall<br>Algorithm dispatch<br>Pure-Rust crates</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Algorithms -->
+<section>
+  <div class="container">
+    <h2 class="section-title">9 Algorithms</h2>
+    <p class="section-subtitle">From blazing-fast LZ4 to maximum-compression Brotli. All fully implemented with roundtrip-tested correctness.</p>
+    <div class="algo-grid">
+      <div class="algo-card">
+        <h3>LZ4</h3>
+        <div class="crate">lz4_flex</div>
+        <div class="meta">Level: N/A (always fast)<br>Best for: real-time streaming</div>
+      </div>
+      <div class="algo-card">
+        <h3>Snappy</h3>
+        <div class="crate">snap</div>
+        <div class="meta">Level: N/A<br>Best for: low-latency storage</div>
+      </div>
+      <div class="algo-card">
+        <h3>Zstd</h3>
+        <div class="crate">zstd</div>
+        <div class="meta">Level: 1-22 (default 3)<br>Best for: general purpose</div>
+      </div>
+      <div class="algo-card">
+        <h3>Gzip</h3>
+        <div class="crate">flate2</div>
+        <div class="meta">Level: 1-9 (default 6)<br>Best for: web content, HTTP</div>
+      </div>
+      <div class="algo-card">
+        <h3>Brotli</h3>
+        <div class="crate">brotli</div>
+        <div class="meta">Level: 0-11 (default 6)<br>Best for: static web assets</div>
+      </div>
+      <div class="algo-card">
+        <h3>LZMA2</h3>
+        <div class="crate">xz2</div>
+        <div class="meta">Level: 0-9 (default 6)<br>Best for: archival, max ratio</div>
+      </div>
+      <div class="algo-card">
+        <h3>Bzip2</h3>
+        <div class="crate">bzip2</div>
+        <div class="meta">Level: 1-9 (default 6)<br>Best for: text compression</div>
+      </div>
+      <div class="algo-card">
+        <h3>LZF</h3>
+        <div class="crate">lzf</div>
+        <div class="meta">Level: N/A<br>Best for: embedded, lightweight</div>
+      </div>
+      <div class="algo-card">
+        <h3>Deflate</h3>
+        <div class="crate">flate2</div>
+        <div class="meta">Level: 1-9 (default 6)<br>Best for: ZIP, PNG</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Benchmarks -->
+<section>
+  <div class="container">
+    <h2 class="section-title">Benchmark Results</h2>
+    <p class="section-subtitle">100 MB compressible text, macOS ARM64, JDK 25, Rust 1.93. Zero-copy API where available.</p>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Algorithm</th>
+            <th>IronCompress Ratio</th>
+            <th>Java Lib Ratio</th>
+            <th>IC Compress (ms)</th>
+            <th>Java Compress (ms)</th>
+            <th>Speedup</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>LZ4</td>
+            <td class="num">254.96x</td>
+            <td class="num">254.97x</td>
+            <td class="num loser">5.1</td>
+            <td class="num winner">4.0</td>
+            <td class="num">0.8x</td>
+          </tr>
+          <tr>
+            <td>Snappy</td>
+            <td class="num">21.02x</td>
+            <td class="num">21.02x</td>
+            <td class="num loser">7.2</td>
+            <td class="num winner">6.1</td>
+            <td class="num">0.8x</td>
+          </tr>
+          <tr>
+            <td>Zstd</td>
+            <td class="num">10,859x</td>
+            <td class="num">10,859x</td>
+            <td class="num winner">9.1</td>
+            <td class="num loser">11.0</td>
+            <td class="num winner">1.2x</td>
+          </tr>
+          <tr>
+            <td>Gzip</td>
+            <td class="num">343.62x</td>
+            <td class="num">343.54x</td>
+            <td class="num winner">84.9</td>
+            <td class="num loser">282.0</td>
+            <td class="num winner">3.3x</td>
+          </tr>
+          <tr>
+            <td>Brotli</td>
+            <td class="num">509,017x</td>
+            <td class="num">478,802x</td>
+            <td class="num winner">66.2</td>
+            <td class="num loser">1,004.4</td>
+            <td class="num winner">15.2x</td>
+          </tr>
+          <tr>
+            <td>LZMA2</td>
+            <td class="num">6,795x</td>
+            <td class="num">6,795x</td>
+            <td class="num loser">2,135.4</td>
+            <td class="num winner">751.2</td>
+            <td class="num">0.4x</td>
+          </tr>
+          <tr>
+            <td>Bzip2</td>
+            <td class="num">3,338x</td>
+            <td class="num">4,609x</td>
+            <td class="num winner">10,056.3</td>
+            <td class="num loser">20,834.0</td>
+            <td class="num winner">2.1x</td>
+          </tr>
+          <tr>
+            <td>LZF</td>
+            <td class="num">85.56x</td>
+            <td class="num">81.61x</td>
+            <td class="num loser">50.5</td>
+            <td class="num winner">7.5</td>
+            <td class="num">0.1x</td>
+          </tr>
+          <tr>
+            <td>Deflate</td>
+            <td class="num">343.64x</td>
+            <td class="num">343.56x</td>
+            <td class="num winner">77.0</td>
+            <td class="num loser">306.7</td>
+            <td class="num winner">4.0x</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top: 16px; font-size: 0.85rem; color: var(--text-muted); text-align: center;">
+      IronCompress wins at Gzip (3.3x), Deflate (4.0x), Brotli (15.2x), and Bzip2 (2.1x).
+      LZ4/Snappy/LZF are faster via JNI-optimized native libraries. Results vary by hardware and data.
+    </p>
+  </div>
+</section>
+
+<!-- Code Examples -->
+<section>
+  <div class="container">
+    <h2 class="section-title">Get Started</h2>
+    <p class="section-subtitle">Simple high-level API or zero-copy MemorySegment for maximum performance.</p>
+    <div class="code-tabs">
+      <div class="code-tab active" onclick="showTab(0)">High-Level API</div>
+      <div class="code-tab" onclick="showTab(1)">Stateful API</div>
+      <div class="code-tab" onclick="showTab(2)">Zero-Copy API</div>
+    </div>
+    <div class="code-panel active" id="panel-0">
+<pre><code>import io.ironcompress.IronCompress;
+import io.ironcompress.model.Algorithm;
+
+byte[] data = "Hello world! ".repeat(10_000).getBytes();
+
+// Compress with LZ4
+byte[] compressed = IronCompress.compress(Algorithm.LZ4, -1, data);
+
+// Decompress
+byte[] restored = IronCompress.decompress(Algorithm.LZ4, compressed, data.length);</code></pre>
+    </div>
+    <div class="code-panel" id="panel-1">
+<pre><code>import io.ironcompress.IronCompressor;
+import io.ironcompress.model.Algorithm;
+
+// Reuses internal off-heap buffers across calls
+try (var compressor = new IronCompressor()) {
+    byte[] compressed = compressor.compress(Algorithm.ZSTD, 3, data);
+    byte[] restored = compressor.decompress(Algorithm.ZSTD, compressed, data.length);
+}</code></pre>
+    </div>
+    <div class="code-panel" id="panel-2">
+<pre><code>import io.ironcompress.IronCompress;
+import io.ironcompress.model.Algorithm;
+import java.lang.foreign.*;
+
+try (Arena arena = Arena.ofConfined()) {
+    MemorySegment input = arena.allocate(data.length);
+    input.copyFrom(MemorySegment.ofArray(data));
+
+    long maxOut = IronCompress.estimateMaxOutputSize(Algorithm.GZIP, 6, data.length);
+    MemorySegment output = arena.allocate(maxOut);
+
+    // Zero byte[] copies across FFI boundary
+    long compressedSize = IronCompress.compress(Algorithm.GZIP, 6, input, output);
+}</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- Cross-Compatibility -->
+<section>
+  <div class="container">
+    <h2 class="section-title">Cross-Decompression Compatibility</h2>
+    <p class="section-subtitle">Can data compressed by IronCompress (Rust) be decompressed by Java libraries?</p>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr><th>Algorithm</th><th>Compatible</th><th>Notes</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Gzip</td><td class="compat-yes">Yes</td><td>Standard gzip format</td></tr>
+          <tr><td>Bzip2</td><td class="compat-yes">Yes</td><td>Standard bzip2 format</td></tr>
+          <tr><td>LZMA2</td><td class="compat-yes">Yes</td><td>Both use XZ format</td></tr>
+          <tr><td>Zstd</td><td class="compat-yes">Yes</td><td>Standard zstd frame format</td></tr>
+          <tr><td>Brotli</td><td class="compat-yes">Yes</td><td>Standard brotli format</td></tr>
+          <tr><td>LZ4</td><td class="compat-no">No</td><td>lz4_flex vs lz4-java differ in block format</td></tr>
+          <tr><td>Snappy</td><td class="compat-no">No</td><td>snap vs snappy-java differ in framing</td></tr>
+          <tr><td>LZF</td><td class="compat-no">No</td><td>Custom flag prefix (raw/compressed)</td></tr>
+          <tr><td>Deflate</td><td class="compat-no">No</td><td>Raw deflate vs zlib-wrapped format</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p>IronCompress is released under the <a href="https://github.com/cburgosro9303/ironcompress/blob/master/LICENSE">MIT License</a>.</p>
+    <p style="margin-top: 8px;"><a href="https://github.com/cburgosro9303/ironcompress">GitHub</a></p>
+  </div>
+</footer>
+
+<script>
+function showTab(index) {
+  document.querySelectorAll('.code-tab').forEach((t, i) => t.classList.toggle('active', i === index));
+  document.querySelectorAll('.code-panel').forEach((p, i) => p.classList.toggle('active', i === index));
+}
+</script>
+
+</body>
+</html>

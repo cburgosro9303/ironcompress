@@ -1,0 +1,195 @@
+name: Release
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g. 1.0.0)'
+        required: true
+        type: string
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Tag & Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      skip: ${{ steps.version.outputs.skip }}
+      next_version: ${{ steps.version.outputs.next_version }}
+      next_tag: ${{ steps.version.outputs.next_tag }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Calculate next version
+        id: version
+        run: |
+          # Get latest tag or default to v0.0.0
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "latest_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+
+          # Parse current version
+          VERSION="${LATEST_TAG#v}"
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+
+          # Get commits since last tag
+          if [ "$LATEST_TAG" = "v0.0.0" ]; then
+            COMMITS=$(git log --pretty=format:"%s" HEAD)
+          else
+            COMMITS=$(git log --pretty=format:"%s" "${LATEST_TAG}..HEAD")
+          fi
+
+          # Skip if no commits since last tag
+          if [ -z "$COMMITS" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Determine bump type from conventional commits
+          BUMP="patch"
+          if echo "$COMMITS" | grep -qE "^[a-z]+(\(.+\))?!:|BREAKING CHANGE"; then
+            BUMP="major"
+          elif echo "$COMMITS" | grep -qE "^feat(\(.+\))?:"; then
+            BUMP="minor"
+          fi
+
+          # Calculate next version
+          case "$BUMP" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH + 1)) ;;
+          esac
+
+          NEXT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          NEXT_TAG="v${NEXT_VERSION}"
+
+          # Major = release, minor/patch = pre-release
+          if [ "$BUMP" = "major" ]; then
+            PRERELEASE="false"
+          else
+            PRERELEASE="true"
+          fi
+
+          echo "next_version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "next_tag=$NEXT_TAG" >> "$GITHUB_OUTPUT"
+          echo "bump=$BUMP" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+          echo "Bump: $BUMP ($LATEST_TAG -> $NEXT_TAG, prerelease=$PRERELEASE)"
+
+      - name: Generate release notes
+        id: notes
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          LATEST_TAG="${{ steps.version.outputs.latest_tag }}"
+
+          if [ "$LATEST_TAG" = "v0.0.0" ]; then
+            RANGE="HEAD"
+          else
+            RANGE="${LATEST_TAG}..HEAD"
+          fi
+
+          {
+            echo "notes<<RELEASE_NOTES_EOF"
+
+            # Breaking changes
+            BREAKING=$(git log --pretty=format:"%s" "$RANGE" | grep -E "^[a-z]+(\(.+\))?!:|BREAKING CHANGE" || true)
+            if [ -n "$BREAKING" ]; then
+              echo "### Breaking Changes"
+              echo "$BREAKING" | while read -r line; do echo "- $line"; done
+              echo ""
+            fi
+
+            # Features
+            FEATURES=$(git log --pretty=format:"%s" "$RANGE" | grep -E "^feat(\(.+\))?:" || true)
+            if [ -n "$FEATURES" ]; then
+              echo "### Features"
+              echo "$FEATURES" | while read -r line; do echo "- $line"; done
+              echo ""
+            fi
+
+            # Fixes
+            FIXES=$(git log --pretty=format:"%s" "$RANGE" | grep -E "^fix(\(.+\))?:" || true)
+            if [ -n "$FIXES" ]; then
+              echo "### Bug Fixes"
+              echo "$FIXES" | while read -r line; do echo "- $line"; done
+              echo ""
+            fi
+
+            # Other
+            OTHER=$(git log --pretty=format:"%s" "$RANGE" | grep -vE "^(feat|fix)(\(.+\))?(!)?\:" || true)
+            if [ -n "$OTHER" ]; then
+              echo "### Other Changes"
+              echo "$OTHER" | while read -r line; do echo "- $line"; done
+              echo ""
+            fi
+
+            echo "RELEASE_NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create tag
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.version.outputs.next_tag }}" -m "Release ${{ steps.version.outputs.next_tag }}"
+          git push origin "${{ steps.version.outputs.next_tag }}"
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.skip != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.next_tag }}
+          name: ${{ steps.version.outputs.next_tag }}
+          body: ${{ steps.notes.outputs.notes }}
+          prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
+          generate_release_notes: false
+
+  publish:
+    name: Publish to GitHub Packages
+    needs: release
+    if: always() && (needs.release.outputs.skip != 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - uses: dtolnay/rust-toolchain@1.93.0
+
+      - name: Build native library
+        working-directory: rust
+        run: cargo build --release
+
+      - name: Run Rust tests
+        working-directory: rust
+        run: cargo test
+
+      - name: Run Java tests
+        working-directory: java
+        run: ./gradlew clean test -Pnative.lib.path=../rust/target/release
+
+      - name: Publish to GitHub Packages
+        working-directory: java
+        run: ./gradlew publish -Pnative.lib.path=../rust/target/release -PreleaseVersion=${{ inputs.version || needs.release.outputs.next_version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}

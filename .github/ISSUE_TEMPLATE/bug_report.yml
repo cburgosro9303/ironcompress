@@ -1,0 +1,97 @@
+name: Bug Report
+description: Report a bug in IronCompress
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug! Please provide as much detail as possible.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Clear and concise description of the bug.
+      placeholder: When I call compress() with...
+    validations:
+      required: true
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Call `IronCompress.compress(Algorithm.LZ4, -1, data)`
+        2. ...
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior
+      description: What actually happened. Include error messages, stack traces, or error codes.
+    validations:
+      required: true
+  - type: dropdown
+    id: algorithm
+    attributes:
+      label: Algorithm
+      description: Which compression algorithm is affected?
+      options:
+        - LZ4
+        - Snappy
+        - Zstd
+        - Gzip
+        - Brotli
+        - LZMA2
+        - Bzip2
+        - LZF
+        - Deflate
+        - All / Multiple
+        - Not applicable
+      default: 10
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of the project is affected?
+      options:
+        - Rust (compression)
+        - Java API (IronCompress / IronCompressor)
+        - FFM / FFI layer
+        - Benchmarks
+        - CI / Build
+      default: 0
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      placeholder: "macOS 15.2 ARM64 / Ubuntu 24.04 x86_64"
+    validations:
+      required: true
+  - type: input
+    id: java-version
+    attributes:
+      label: Java Version
+      placeholder: "JDK 25-ea"
+    validations:
+      required: false
+  - type: input
+    id: rust-version
+    attributes:
+      label: Rust Version
+      placeholder: "rustc 1.85.0"
+    validations:
+      required: false

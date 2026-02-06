@@ -1,0 +1,65 @@
+name: Improvement
+description: Suggest an improvement to an existing feature
+title: "[Improvement]: "
+labels: ["enhancement", "improvement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Suggest an improvement to an existing feature or behavior.
+  - type: textarea
+    id: current-behavior
+    attributes:
+      label: Current Behavior
+      description: Describe how the feature currently works.
+      placeholder: Currently, IronCompress does...
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-improvement
+    attributes:
+      label: Proposed Improvement
+      description: Describe how you would like it to work instead.
+      placeholder: It would be better if...
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why is this improvement needed? What problem does it solve?
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of the project does this affect?
+      options:
+        - Rust (compression algorithms)
+        - Java API
+        - FFM / FFI layer
+        - Benchmarks
+        - CI / Build
+        - Documentation
+      default: 0
+    validations:
+      required: true
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      description: How significant is this improvement?
+      options:
+        - Low — cosmetic or minor convenience
+        - Medium — noticeable improvement in usability or performance
+        - High — significant impact on functionality or performance
+      default: 1
+    validations:
+      required: true
+  - type: checkboxes
+    id: breaking-change
+    attributes:
+      label: Breaking Change
+      options:
+        - label: This improvement would require breaking changes to the public API
