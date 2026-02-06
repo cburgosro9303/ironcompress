@@ -1,0 +1,20 @@
+# Rust
+rust/target/
+
+# Java / Gradle
+java/.gradle/
+java/build/
+java/gradle/
+java/gradlew
+java/gradlew.bat
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
