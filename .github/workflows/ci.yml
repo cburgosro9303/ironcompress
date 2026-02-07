@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@1.93.0
+      - uses: dtolnay/rust-toolchain@1.100.0
         with:
           components: rustfmt, clippy
 
@@ -55,7 +55,7 @@ jobs:
           distribution: temurin
           java-version: 25
 
-      - uses: dtolnay/rust-toolchain@1.93.0
+      - uses: dtolnay/rust-toolchain@1.100.0
 
       - name: Build native library
         working-directory: rust
@@ -87,7 +87,7 @@ jobs:
           distribution: temurin
           java-version: 25
 
-      - uses: dtolnay/rust-toolchain@1.93.0
+      - uses: dtolnay/rust-toolchain@1.100.0
 
       - name: Build native library
         working-directory: rust
