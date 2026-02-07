@@ -1,0 +1,69 @@
+version: 2
+
+updates:
+  # Rust (Cargo) dependencies
+  - package-ecosystem: cargo
+    directory: /rust
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(deps):"
+    labels:
+      - dependencies
+      - rust
+    open-pull-requests-limit: 10
+    groups:
+      rust-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # Java (Gradle) dependencies
+  - package-ecosystem: gradle
+    directory: /java
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(deps):"
+    labels:
+      - dependencies
+      - java
+    open-pull-requests-limit: 10
+    groups:
+      java-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # Benchmark (Gradle) dependencies
+  - package-ecosystem: gradle
+    directory: /benchmark
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(deps):"
+    labels:
+      - dependencies
+      - benchmark
+    open-pull-requests-limit: 5
+    groups:
+      benchmark-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(ci):"
+    labels:
+      - dependencies
+      - ci
+    open-pull-requests-limit: 5
