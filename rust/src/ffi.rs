@@ -1,4 +1,4 @@
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use crate::compress::{self, CompressionAlgo};
 use crate::error;
@@ -23,7 +23,8 @@ pub extern "C" fn compress_native(
 ) -> i32 {
     catch_unwind(AssertUnwindSafe(|| {
         compress_native_inner(algo, level, in_ptr, in_len, out_ptr, out_cap, out_len)
-    })).unwrap_or_else(|_| error::PANIC_CAUGHT)
+    }))
+    .unwrap_or_else(|_| error::PANIC_CAUGHT)
 }
 
 fn compress_native_inner(
@@ -75,7 +76,8 @@ pub extern "C" fn decompress_native(
 ) -> i32 {
     catch_unwind(AssertUnwindSafe(|| {
         decompress_native_inner(algo, in_ptr, in_len, out_ptr, out_cap, out_len)
-    })).unwrap_or_else(|_| error::PANIC_CAUGHT)
+    }))
+    .unwrap_or_else(|_| error::PANIC_CAUGHT)
 }
 
 fn decompress_native_inner(
@@ -118,7 +120,11 @@ fn decompress_native_inner(
 pub extern "C" fn estimate_max_output_size_native(algo: u8, level: i32, in_len: usize) -> usize {
     match catch_unwind(AssertUnwindSafe(|| {
         let compression_algo = CompressionAlgo::try_from(algo).ok()?;
-        Some(compress::estimate_max_output_size(compression_algo, level, in_len))
+        Some(compress::estimate_max_output_size(
+            compression_algo,
+            level,
+            in_len,
+        ))
     })) {
         Ok(Some(size)) => size,
         _ => 0,
@@ -141,9 +147,12 @@ mod tests {
 
         // null input pointer
         let result = compress_native(
-            1, -1,
-            std::ptr::null(), 10,
-            out.as_mut_ptr(), out.len(),
+            1,
+            -1,
+            std::ptr::null(),
+            10,
+            out.as_mut_ptr(),
+            out.len(),
             &mut out_len,
         );
         assert_eq!(result, error::INVALID_ARGUMENT);
@@ -151,18 +160,24 @@ mod tests {
         // null output pointer
         let input = b"hello";
         let result = compress_native(
-            1, -1,
-            input.as_ptr(), input.len(),
-            std::ptr::null_mut(), 64,
+            1,
+            -1,
+            input.as_ptr(),
+            input.len(),
+            std::ptr::null_mut(),
+            64,
             &mut out_len,
         );
         assert_eq!(result, error::INVALID_ARGUMENT);
 
         // null out_len pointer
         let result = compress_native(
-            1, -1,
-            input.as_ptr(), input.len(),
-            out.as_mut_ptr(), out.len(),
+            1,
+            -1,
+            input.as_ptr(),
+            input.len(),
+            out.as_mut_ptr(),
+            out.len(),
             std::ptr::null_mut(),
         );
         assert_eq!(result, error::INVALID_ARGUMENT);
@@ -174,9 +189,12 @@ mod tests {
         let mut out = [0u8; 64];
         let mut out_len: usize = 0;
         let result = compress_native(
-            255, -1,
-            input.as_ptr(), input.len(),
-            out.as_mut_ptr(), out.len(),
+            255,
+            -1,
+            input.as_ptr(),
+            input.len(),
+            out.as_mut_ptr(),
+            out.len(),
             &mut out_len,
         );
         assert_eq!(result, error::ALGO_NOT_FOUND);
@@ -194,8 +212,10 @@ mod tests {
 
         let result = decompress_native(
             1,
-            std::ptr::null(), 10,
-            out.as_mut_ptr(), out.len(),
+            std::ptr::null(),
+            10,
+            out.as_mut_ptr(),
+            out.len(),
             &mut out_len,
         );
         assert_eq!(result, error::INVALID_ARGUMENT);
@@ -208,8 +228,10 @@ mod tests {
         let mut out_len: usize = 0;
         let result = decompress_native(
             255,
-            input.as_ptr(), input.len(),
-            out.as_mut_ptr(), out.len(),
+            input.as_ptr(),
+            input.len(),
+            out.as_mut_ptr(),
+            out.len(),
             &mut out_len,
         );
         assert_eq!(result, error::ALGO_NOT_FOUND);
@@ -222,8 +244,10 @@ mod tests {
         let mut out_len: usize = 0;
         let result = decompress_native(
             1,
-            input.as_ptr(), input.len(),
-            out.as_mut_ptr(), out.len(),
+            input.as_ptr(),
+            input.len(),
+            out.as_mut_ptr(),
+            out.len(),
             &mut out_len,
         );
         assert_eq!(result, error::INTERNAL_ERROR);

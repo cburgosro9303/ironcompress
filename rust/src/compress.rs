@@ -45,29 +45,53 @@ fn clamp_level(algo: CompressionAlgo, level: i32) -> i32 {
         CompressionAlgo::Snappy => 0,
         // Zstd: 1-22, default 3
         CompressionAlgo::Zstd => {
-            if level <= 0 { 3 } else { level.clamp(1, 22) }
+            if level <= 0 {
+                3
+            } else {
+                level.clamp(1, 22)
+            }
         }
         // Gzip: 1-9, default 6 (flate2 level 0 = no compression)
         CompressionAlgo::Gzip => {
-            if level <= 0 { 6 } else { level.clamp(1, 9) }
+            if level <= 0 {
+                6
+            } else {
+                level.clamp(1, 9)
+            }
         }
         // Brotli: 1-11, default 6 (level 0 = nearly no compression)
         CompressionAlgo::Brotli => {
-            if level <= 0 { 6 } else { level.clamp(1, 11) }
+            if level <= 0 {
+                6
+            } else {
+                level.clamp(1, 11)
+            }
         }
         // LZMA2: 1-9, default 6
         CompressionAlgo::Lzma2 => {
-            if level <= 0 { 6 } else { level.clamp(1, 9) }
+            if level <= 0 {
+                6
+            } else {
+                level.clamp(1, 9)
+            }
         }
         // Bzip2: 1-9, default 6 (level = block size in 100KB units)
         CompressionAlgo::Bzip2 => {
-            if level <= 0 { 6 } else { level.clamp(1, 9) }
+            if level <= 0 {
+                6
+            } else {
+                level.clamp(1, 9)
+            }
         }
         // LZF has no level control.
         CompressionAlgo::Lzf => 0,
         // Deflate: 1-9, default 6 (flate2 level 0 = no compression)
         CompressionAlgo::Deflate => {
-            if level <= 0 { 6 } else { level.clamp(1, 9) }
+            if level <= 0 {
+                6
+            } else {
+                level.clamp(1, 9)
+            }
         }
     }
 }
@@ -113,8 +137,7 @@ fn compress_snappy(input: &[u8], output: &mut [u8]) -> Result<usize, CompressErr
 
 fn compress_gzip(input: &[u8], output: &mut [u8], level: i32) -> Result<usize, CompressError> {
     let cursor = Cursor::new(output);
-    let mut encoder =
-        flate2::write::GzEncoder::new(cursor, flate2::Compression::new(level as u32));
+    let mut encoder = flate2::write::GzEncoder::new(cursor, flate2::Compression::new(level as u32));
     encoder.write_all(input)?;
     let cursor = encoder.finish()?;
     Ok(cursor.position() as usize)
@@ -165,10 +188,7 @@ fn compress_lzma2(input: &[u8], output: &mut [u8], level: i32) -> Result<usize, 
 
 fn compress_bzip2(input: &[u8], output: &mut [u8], level: i32) -> Result<usize, CompressError> {
     let cursor = Cursor::new(output);
-    let mut encoder = bzip2::write::BzEncoder::new(
-        cursor,
-        bzip2::Compression::new(level as u32),
-    );
+    let mut encoder = bzip2::write::BzEncoder::new(cursor, bzip2::Compression::new(level as u32));
     encoder.write_all(input)?;
     let cursor = encoder.finish()?;
     Ok(cursor.position() as usize)
@@ -275,7 +295,9 @@ fn decompress_bzip2(input: &[u8], output: &mut [u8]) -> Result<usize, CompressEr
 
 fn decompress_lzf(input: &[u8], output: &mut [u8]) -> Result<usize, CompressError> {
     if input.is_empty() {
-        return Err(CompressError::Internal("LZF decompress: empty input".into()));
+        return Err(CompressError::Internal(
+            "LZF decompress: empty input".into(),
+        ));
     }
     let flag = input[0];
     let payload = &input[1..];
@@ -283,7 +305,9 @@ fn decompress_lzf(input: &[u8], output: &mut [u8]) -> Result<usize, CompressErro
         0x00 => {
             // Raw stored data
             if payload.len() > output.len() {
-                return Err(CompressError::BufferTooSmall { needed: payload.len() });
+                return Err(CompressError::BufferTooSmall {
+                    needed: payload.len(),
+                });
             }
             output[..payload.len()].copy_from_slice(payload);
             Ok(payload.len())
@@ -293,12 +317,16 @@ fn decompress_lzf(input: &[u8], output: &mut [u8]) -> Result<usize, CompressErro
             let decompressed = lzf::decompress(payload, output.len())
                 .map_err(|e| CompressError::Internal(format!("LZF decompress: {e:?}")))?;
             if decompressed.len() > output.len() {
-                return Err(CompressError::BufferTooSmall { needed: decompressed.len() });
+                return Err(CompressError::BufferTooSmall {
+                    needed: decompressed.len(),
+                });
             }
             output[..decompressed.len()].copy_from_slice(&decompressed);
             Ok(decompressed.len())
         }
-        _ => Err(CompressError::Internal(format!("LZF decompress: unknown flag {flag}"))),
+        _ => Err(CompressError::Internal(format!(
+            "LZF decompress: unknown flag {flag}"
+        ))),
     }
 }
 
@@ -327,8 +355,7 @@ mod tests {
         let max = lz4_flex::block::get_maximum_output_size(input.len());
         let mut compressed = vec![0u8; max];
         let n = compress(CompressionAlgo::Lz4, -1, &input, &mut compressed).unwrap();
-        let decompressed =
-            lz4_flex::block::decompress(&compressed[..n], input.len()).unwrap();
+        let decompressed = lz4_flex::block::decompress(&compressed[..n], input.len()).unwrap();
         assert_eq!(input, decompressed);
     }
 
@@ -466,7 +493,12 @@ mod tests {
         let mut compressed = vec![0u8; max];
         let n = compress(CompressionAlgo::Deflate, 6, &input, &mut compressed).unwrap();
         let mut decompressed = vec![0u8; input.len()];
-        let m = decompress(CompressionAlgo::Deflate, &compressed[..n], &mut decompressed).unwrap();
+        let m = decompress(
+            CompressionAlgo::Deflate,
+            &compressed[..n],
+            &mut decompressed,
+        )
+        .unwrap();
         assert_eq!(m, input.len());
         assert_eq!(&decompressed[..m], &input[..]);
     }
@@ -532,6 +564,9 @@ mod tests {
         let mut tiny = vec![0u8; 4];
         let err = decompress(CompressionAlgo::Lz4, &compressed[..n], &mut tiny).unwrap_err();
         // LZ4 decompress with too-small output should fail
-        assert!(err.to_code() == crate::error::INTERNAL_ERROR || err.to_code() == crate::error::BUFFER_TOO_SMALL);
+        assert!(
+            err.to_code() == crate::error::INTERNAL_ERROR
+                || err.to_code() == crate::error::BUFFER_TOO_SMALL
+        );
     }
 }
