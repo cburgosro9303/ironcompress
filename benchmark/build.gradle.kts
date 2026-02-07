@@ -40,8 +40,8 @@ dependencies {
     implementation("com.ning:compress-lzf:1.2.0")
 
     // Test
-    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
-    testImplementation("org.junit.jupiter:junit-jupiter-params:5.11.4")
+    testImplementation("org.junit.jupiter:junit-jupiter:6.0.2")
+    testImplementation("org.junit.jupiter:junit-jupiter-params:6.0.2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
