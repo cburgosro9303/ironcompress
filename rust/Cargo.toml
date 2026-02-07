@@ -14,6 +14,7 @@ codegen-units = 1
 opt-level = 3
 
 [dependencies]
+log = "0.4"
 lz4_flex = "0.12.0"
 snap = "1.1"
 flate2 = "1.1"

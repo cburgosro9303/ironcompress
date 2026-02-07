@@ -183,7 +183,7 @@ jobs:
 
       - name: Publish to GitHub Packages
         working-directory: java
-        run: ./gradlew publish -Pnative.lib.path=../rust/target/release -Pversion=${{ needs.release.outputs.next_version }}
+        run: ./gradlew publish -Pnative.lib.path=../rust/target/release -PreleaseVersion=${{ needs.release.outputs.next_version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
