@@ -14,6 +14,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      skip: ${{ steps.version.outputs.skip }}
+      next_version: ${{ steps.version.outputs.next_version }}
+      next_tag: ${{ steps.version.outputs.next_tag }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -83,7 +88,6 @@ jobs:
         if: steps.version.outputs.skip != 'true'
         run: |
           LATEST_TAG="${{ steps.version.outputs.latest_tag }}"
-          NEXT_TAG="${{ steps.version.outputs.next_tag }}"
 
           if [ "$LATEST_TAG" = "v0.0.0" ]; then
             RANGE="HEAD"
@@ -146,3 +150,40 @@ jobs:
           body: ${{ steps.notes.outputs.notes }}
           prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
           generate_release_notes: false
+
+  publish:
+    name: Publish to GitHub Packages
+    needs: release
+    if: needs.release.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build native library
+        working-directory: rust
+        run: cargo build --release
+
+      - name: Run Rust tests
+        working-directory: rust
+        run: cargo test
+
+      - name: Run Java tests
+        working-directory: java
+        run: ./gradlew clean test -Pnative.lib.path=../rust/target/release
+
+      - name: Publish to GitHub Packages
+        working-directory: java
+        run: ./gradlew publish -Pnative.lib.path=../rust/target/release -Pversion=${{ needs.release.outputs.next_version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
