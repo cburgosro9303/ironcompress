@@ -5,7 +5,7 @@ use crate::error;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn native_ping() -> i32 {
-    catch_unwind(AssertUnwindSafe(|| 1i32)).unwrap_or_else(|_| error::PANIC_CAUGHT)
+    catch_unwind(AssertUnwindSafe(|| 1i32)).unwrap_or(error::PANIC_CAUGHT)
 }
 
 /// Compress `in_len` bytes from `in_ptr` into the buffer at `out_ptr` (capacity `out_cap`).
@@ -24,7 +24,7 @@ pub extern "C" fn compress_native(
     catch_unwind(AssertUnwindSafe(|| {
         compress_native_inner(algo, level, in_ptr, in_len, out_ptr, out_cap, out_len)
     }))
-    .unwrap_or_else(|_| error::PANIC_CAUGHT)
+    .unwrap_or(error::PANIC_CAUGHT)
 }
 
 fn compress_native_inner(
@@ -77,7 +77,7 @@ pub extern "C" fn decompress_native(
     catch_unwind(AssertUnwindSafe(|| {
         decompress_native_inner(algo, in_ptr, in_len, out_ptr, out_cap, out_len)
     }))
-    .unwrap_or_else(|_| error::PANIC_CAUGHT)
+    .unwrap_or(error::PANIC_CAUGHT)
 }
 
 fn decompress_native_inner(

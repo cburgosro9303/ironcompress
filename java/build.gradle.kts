@@ -1,5 +1,6 @@
 plugins {
     java
+    `maven-publish`
 }
 
 repositories {
@@ -26,4 +27,37 @@ tasks.test {
     }
 
     jvmArgs("--enable-native-access=ALL-UNNAMED")
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("maven") {
+            groupId = "io.ironcompress"
+            artifactId = "ironcompress"
+            version = project.findProperty("version")?.toString() ?: "0.1.0"
+            from(components["java"])
+
+            pom {
+                name.set("IronCompress")
+                description.set("Multi-algorithm compression for Java, powered by Rust via FFM")
+                url.set("https://github.com/cburgosro9303/ironcompress")
+                licenses {
+                    license {
+                        name.set("MIT License")
+                        url.set("https://opensource.org/licenses/MIT")
+                    }
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/cburgosro9303/ironcompress")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR") ?: ""
+                password = System.getenv("GITHUB_TOKEN") ?: ""
+            }
+        }
+    }
 }

@@ -12,11 +12,8 @@ concurrency:
 
 jobs:
   rust:
-    name: Rust (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
+    name: Rust
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -43,18 +40,13 @@ jobs:
       - name: Upload native library
         uses: actions/upload-artifact@v4
         with:
-          name: native-lib-${{ matrix.os }}
-          path: |
-            rust/target/release/libironcompress.dylib
-            rust/target/release/libironcompress.so
+          name: native-lib
+          path: rust/target/release/libironcompress.so
 
   java:
-    name: Java (${{ matrix.os }})
+    name: Java
     needs: rust
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -80,16 +72,13 @@ jobs:
       - name: Upload JAR
         uses: actions/upload-artifact@v4
         with:
-          name: ironcompress-jar-${{ matrix.os }}
+          name: ironcompress-jar
           path: java/build/libs/ironcompress.jar
 
   benchmark:
-    name: Benchmark (${{ matrix.os }})
+    name: Benchmark
     needs: java
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
