@@ -3,7 +3,7 @@
 [![CI](https://github.com/cburgosro9303/ironcompress/actions/workflows/ci.yml/badge.svg)](https://github.com/cburgosro9303/ironcompress/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Java 25+](https://img.shields.io/badge/Java-25%2B-blue.svg)](#requirements)
-[![Rust 1.85+](https://img.shields.io/badge/Rust-1.85%2B-orange.svg)](#requirements)
+[![Rust 1.93.0](https://img.shields.io/badge/Rust-1.93.0-orange.svg)](#requirements)
 
 Multi-algorithm compression for Java, powered by Rust via FFM (Foreign Function & Memory).
 
@@ -102,7 +102,7 @@ try (Arena arena = Arena.ofConfined()) {
 
 ### Requirements
 
-- Rust 1.85+ (edition 2024)
+- Rust 1.93.0 (edition 2024)
 - Java 25+ (FFM stable)
 - Gradle 9.x
 
@@ -147,7 +147,7 @@ cd benchmark
 | LZF       | 85.56x      | compress-lzf 81.61x | 50.5 | 7.5 | 0.1x |
 | Deflate   | 343.64x     | java.util.zip 343.56x | 77.0 | 306.7 | **4.0x** |
 
-> Ratios use zero-copy API where available. Benchmark on macOS ARM64, JDK 25, Rust 1.85.
+> Ratios use zero-copy API where available. Benchmark on macOS ARM64, JDK 25, Rust 1.93.
 > IronCompress excels at Gzip, Deflate, Brotli, and Bzip2 compression speed.
 > LZ4/Snappy/LZF are faster in Java due to JNI-optimized native libraries with lower FFI overhead.
 
