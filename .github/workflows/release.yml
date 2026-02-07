@@ -3,6 +3,12 @@ name: Release
 on:
   push:
     branches: [master]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g. 1.0.0)'
+        required: true
+        type: string
 
 concurrency:
   group: release
@@ -154,7 +160,7 @@ jobs:
   publish:
     name: Publish to GitHub Packages
     needs: release
-    if: needs.release.outputs.skip != 'true'
+    if: always() && (needs.release.outputs.skip != 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -183,7 +189,7 @@ jobs:
 
       - name: Publish to GitHub Packages
         working-directory: java
-        run: ./gradlew publish -Pnative.lib.path=../rust/target/release -PreleaseVersion=${{ needs.release.outputs.next_version }}
+        run: ./gradlew publish -Pnative.lib.path=../rust/target/release -PreleaseVersion=${{ inputs.version || needs.release.outputs.next_version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
