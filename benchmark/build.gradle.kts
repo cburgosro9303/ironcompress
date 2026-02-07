@@ -30,14 +30,14 @@ dependencies {
     implementation(fileTree("../java/build/libs") { include("ironcompress*.jar") })
 
     // Competitor libraries
-    implementation("at.yawk.lz4:lz4-java:1.8.1")
+    implementation("at.yawk.lz4:lz4-java:1.10.3")
     implementation("org.xerial.snappy:snappy-java:1.1.10.8")
     implementation("com.github.luben:zstd-jni:1.5.7-7")
     implementation("com.aayushatharva.brotli4j:brotli4j:1.20.0")
     runtimeOnly("com.aayushatharva.brotli4j:native-${brotli4jPlatform()}:1.20.0")
     implementation("org.tukaani:xz:1.11")
     implementation("org.apache.commons:commons-compress:1.28.0")
-    implementation("com.ning:compress-lzf:1.1.3")
+    implementation("com.ning:compress-lzf:1.2.0")
 
     // Test
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
