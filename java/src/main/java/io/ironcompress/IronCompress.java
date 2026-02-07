@@ -15,6 +15,8 @@ import java.lang.foreign.ValueLayout;
  */
 public final class IronCompress {
 
+    private static final System.Logger LOG = System.getLogger(IronCompress.class.getName());
+
     private IronCompress() {
     }
 
@@ -24,10 +26,17 @@ public final class IronCompress {
             throw new IllegalArgumentException("input must not be null");
         }
 
+        LOG.log(System.Logger.Level.DEBUG, "compress: algo={0}, level={1}, inputLen={2}",
+                algo, level, input.length);
+
         long estimate = estimateMaxOutputSize(algo, level, input.length);
 
         byte[] result = tryCompress(algo, level, input, estimate);
         if (result != null) {
+            double ratio = result.length > 0 ? (double) input.length / result.length : 0.0;
+            LOG.log(System.Logger.Level.INFO,
+                    "compress: algo={0}, {1} -> {2} bytes (ratio={3})",
+                    algo, input.length, result.length, String.format("%.2fx", ratio));
             return result;
         }
 
@@ -44,6 +53,9 @@ public final class IronCompress {
             throw new IllegalArgumentException("expectedSize must be > 0");
         }
 
+        LOG.log(System.Logger.Level.DEBUG, "decompress: algo={0}, inputLen={1}, expectedSize={2}",
+                algo, input.length, expectedSize);
+
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment inSeg = arena.allocate(input.length);
             inSeg.copyFrom(MemorySegment.ofArray(input));
@@ -59,6 +71,8 @@ public final class IronCompress {
 
             if (code == NativeError.SUCCESS.code()) {
                 int n = (int) outLen.get(ValueLayout.JAVA_LONG, 0);
+                LOG.log(System.Logger.Level.INFO, "decompress: algo={0}, {1} -> {2} bytes",
+                        algo, input.length, n);
                 return outSeg.asSlice(0, n).toArray(ValueLayout.JAVA_BYTE);
             }
 
@@ -81,6 +95,9 @@ public final class IronCompress {
      */
     public static long compress(Algorithm algo, int level, MemorySegment input, MemorySegment output)
             throws IronCompressException {
+        LOG.log(System.Logger.Level.DEBUG,
+                "compress(segment): algo={0}, level={1}, inputSize={2}, outputCap={3}",
+                algo, level, input.byteSize(), output.byteSize());
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment outLen = arena.allocate(ValueLayout.JAVA_LONG);
             int code = NativeLib.compressNative(
@@ -90,7 +107,11 @@ public final class IronCompress {
                     outLen);
 
             if (code == NativeError.SUCCESS.code()) {
-                return outLen.get(ValueLayout.JAVA_LONG, 0);
+                long n = outLen.get(ValueLayout.JAVA_LONG, 0);
+                LOG.log(System.Logger.Level.INFO,
+                        "compress(segment): algo={0}, {1} -> {2} bytes",
+                        algo, input.byteSize(), n);
+                return n;
             }
 
             NativeError err = NativeError.fromCode(code);
@@ -111,6 +132,9 @@ public final class IronCompress {
      */
     public static long decompress(Algorithm algo, MemorySegment input, MemorySegment output)
             throws IronCompressException {
+        LOG.log(System.Logger.Level.DEBUG,
+                "decompress(segment): algo={0}, inputSize={1}, outputCap={2}",
+                algo, input.byteSize(), output.byteSize());
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment outLen = arena.allocate(ValueLayout.JAVA_LONG);
             int code = NativeLib.decompressNative(
@@ -120,7 +144,11 @@ public final class IronCompress {
                     outLen);
 
             if (code == NativeError.SUCCESS.code()) {
-                return outLen.get(ValueLayout.JAVA_LONG, 0);
+                long n = outLen.get(ValueLayout.JAVA_LONG, 0);
+                LOG.log(System.Logger.Level.INFO,
+                        "decompress(segment): algo={0}, {1} -> {2} bytes",
+                        algo, input.byteSize(), n);
+                return n;
             }
 
             NativeError err = NativeError.fromCode(code);
@@ -130,13 +158,16 @@ public final class IronCompress {
     }
 
     public static long estimateMaxOutputSize(Algorithm algo, int level, long inputLen) {
-        // Implement estimation logic in Java to save an FFI call
-        return switch (algo) {
+        long estimate = switch (algo) {
             case LZ4 -> inputLen + (inputLen / 255) + 16;
             case SNAPPY -> 32 + inputLen + (inputLen / 6);
             case GZIP, DEFLATE -> inputLen + (inputLen / 8) + 32;
             default -> NativeLib.estimateMaxOutputSize(algo.id(), level, inputLen);
         };
+        LOG.log(System.Logger.Level.TRACE,
+                "estimateMaxOutputSize: algo={0}, inputLen={1}, estimate={2}",
+                algo, inputLen, estimate);
+        return estimate;
     }
 
     /**
@@ -166,7 +197,11 @@ public final class IronCompress {
 
                 if (code == NativeError.BUFFER_TOO_SMALL.code() && attempt == 0) {
                     long hint = outLen.get(ValueLayout.JAVA_LONG, 0);
+                    long oldSize = bufferSize;
                     bufferSize = (hint > bufferSize) ? hint : bufferSize * 2;
+                    LOG.log(System.Logger.Level.DEBUG,
+                            "tryCompress: buffer too small, resizing {0} -> {1} (hint={2})",
+                            oldSize, bufferSize, hint);
                     continue;
                 }
 

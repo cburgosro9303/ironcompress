@@ -9,12 +9,15 @@ import java.nio.file.Path;
  */
 final class NativeLoader {
 
+    private static final System.Logger LOG = System.getLogger(NativeLoader.class.getName());
     private static final SymbolLookup LIB;
 
     static {
         String libName = resolveLibraryName();
         Path libPath = resolveLibraryPath(libName);
+        LOG.log(System.Logger.Level.DEBUG, "Resolving native library: name={0}, path={1}", libName, libPath);
         LIB = SymbolLookup.libraryLookup(libPath, Arena.ofAuto());
+        LOG.log(System.Logger.Level.INFO, "Native library loaded: {0}", libPath);
     }
 
     private NativeLoader() {}

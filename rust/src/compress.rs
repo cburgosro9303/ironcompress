@@ -1,5 +1,7 @@
 use std::io::{Cursor, Read, Write};
 
+use log::trace;
+
 use crate::error::CompressError;
 
 /// Algorithm IDs — stable, never change.
@@ -105,6 +107,10 @@ pub fn compress(
     output: &mut [u8],
 ) -> Result<usize, CompressError> {
     let level = clamp_level(algo, level);
+    trace!(
+        "compress: dispatching algo={algo:?}, clamped_level={level}, input_len={}",
+        input.len()
+    );
 
     match algo {
         CompressionAlgo::Lz4 => compress_lz4(input, output),
@@ -238,6 +244,11 @@ pub fn decompress(
     input: &[u8],
     output: &mut [u8],
 ) -> Result<usize, CompressError> {
+    trace!(
+        "decompress: dispatching algo={algo:?}, input_len={}",
+        input.len()
+    );
+
     match algo {
         CompressionAlgo::Lz4 => decompress_lz4(input, output),
         CompressionAlgo::Snappy => decompress_snappy(input, output),

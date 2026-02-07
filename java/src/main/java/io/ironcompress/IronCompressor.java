@@ -20,6 +20,8 @@ import java.lang.foreign.ValueLayout;
  */
 public final class IronCompressor implements AutoCloseable {
 
+    private static final System.Logger LOG = System.getLogger(IronCompressor.class.getName());
+
     private Arena arena;
     private MemorySegment inputBuffer;
     private MemorySegment outputBuffer;
@@ -39,6 +41,9 @@ public final class IronCompressor implements AutoCloseable {
         this.inputBuffer = this.arena.allocate(inSize);
         this.outputBuffer = this.arena.allocate(outSize);
         this.outLen = this.arena.allocate(ValueLayout.JAVA_LONG);
+        LOG.log(System.Logger.Level.INFO,
+                "IronCompressor created: inputBuffer={0}, outputBuffer={1}",
+                inSize, outSize);
     }
 
     /**
@@ -52,6 +57,10 @@ public final class IronCompressor implements AutoCloseable {
         long maxOut = IronCompress.estimateMaxOutputSize(algo, level, input.length);
         ensureOutputCapacity(maxOut);
 
+        LOG.log(System.Logger.Level.DEBUG,
+                "compress: algo={0}, level={1}, inputLen={2}, outputCap={3}",
+                algo, level, input.length, outputBuffer.byteSize());
+
         // Copy input to off-heap
         MemorySegment.copy(input, 0, inputBuffer, ValueLayout.JAVA_BYTE, 0, input.length);
 
@@ -63,12 +72,17 @@ public final class IronCompressor implements AutoCloseable {
 
         if (code == NativeError.SUCCESS.code()) {
             long n = outLen.get(ValueLayout.JAVA_LONG, 0);
+            LOG.log(System.Logger.Level.INFO,
+                    "compress: algo={0}, {1} -> {2} bytes",
+                    algo, input.length, n);
             return outputBuffer.asSlice(0, n).toArray(ValueLayout.JAVA_BYTE);
         }
 
         // Handle buffer too small (resize and retry once)
         if (code == NativeError.BUFFER_TOO_SMALL.code()) {
             long needed = outLen.get(ValueLayout.JAVA_LONG, 0);
+            LOG.log(System.Logger.Level.DEBUG,
+                    "compress: buffer too small, resizing to {0}", needed);
             ensureOutputCapacity(needed);
 
             code = NativeLib.compressNative(
@@ -79,6 +93,9 @@ public final class IronCompressor implements AutoCloseable {
 
             if (code == NativeError.SUCCESS.code()) {
                 long n = outLen.get(ValueLayout.JAVA_LONG, 0);
+                LOG.log(System.Logger.Level.INFO,
+                        "compress: algo={0}, {1} -> {2} bytes (after retry)",
+                        algo, input.length, n);
                 return outputBuffer.asSlice(0, n).toArray(ValueLayout.JAVA_BYTE);
             }
         }
@@ -96,6 +113,10 @@ public final class IronCompressor implements AutoCloseable {
         ensureInputCapacity(input.length);
         ensureOutputCapacity(expectedSize);
 
+        LOG.log(System.Logger.Level.DEBUG,
+                "decompress: algo={0}, inputLen={1}, expectedSize={2}",
+                algo, input.length, expectedSize);
+
         MemorySegment.copy(input, 0, inputBuffer, ValueLayout.JAVA_BYTE, 0, input.length);
 
         int code = NativeLib.decompressNative(
@@ -106,6 +127,9 @@ public final class IronCompressor implements AutoCloseable {
 
         if (code == NativeError.SUCCESS.code()) {
             long n = outLen.get(ValueLayout.JAVA_LONG, 0);
+            LOG.log(System.Logger.Level.INFO,
+                    "decompress: algo={0}, {1} -> {2} bytes",
+                    algo, input.length, n);
             return outputBuffer.asSlice(0, n).toArray(ValueLayout.JAVA_BYTE);
         }
 
@@ -116,17 +140,19 @@ public final class IronCompressor implements AutoCloseable {
 
     private void ensureInputCapacity(long size) {
         if (inputBuffer.byteSize() < size) {
-            // Allocate new larger buffer in existing arena (old one is leaked until close)
-            // If growth is excessive, we might want to recycle the Arena, but that's
-            // expensive.
-            // For now, simple reallocation.
-            inputBuffer = arena.allocate(Math.max(size, inputBuffer.byteSize() * 2));
+            long newSize = Math.max(size, inputBuffer.byteSize() * 2);
+            LOG.log(System.Logger.Level.DEBUG,
+                    "Growing input buffer: {0} -> {1}", inputBuffer.byteSize(), newSize);
+            inputBuffer = arena.allocate(newSize);
         }
     }
 
     private void ensureOutputCapacity(long size) {
         if (outputBuffer.byteSize() < size) {
-            outputBuffer = arena.allocate(Math.max(size, outputBuffer.byteSize() * 2));
+            long newSize = Math.max(size, outputBuffer.byteSize() * 2);
+            LOG.log(System.Logger.Level.DEBUG,
+                    "Growing output buffer: {0} -> {1}", outputBuffer.byteSize(), newSize);
+            outputBuffer = arena.allocate(newSize);
         }
     }
 
@@ -141,6 +167,7 @@ public final class IronCompressor implements AutoCloseable {
         if (!closed) {
             arena.close();
             closed = true;
+            LOG.log(System.Logger.Level.INFO, "IronCompressor closed");
         }
     }
 }

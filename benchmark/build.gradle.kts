@@ -2,6 +2,8 @@ plugins {
     java
 }
 
+group = "org.iumotionlabs"
+
 repositories {
     mavenCentral()
 }
@@ -25,7 +27,7 @@ fun brotli4jPlatform(): String {
 }
 
 dependencies {
-    implementation(files("../java/build/libs/ironcompress.jar"))
+    implementation(fileTree("../java/build/libs") { include("ironcompress*.jar") })
 
     // Competitor libraries
     implementation("at.yawk.lz4:lz4-java:1.8.1")

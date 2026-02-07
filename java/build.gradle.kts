@@ -3,6 +3,9 @@ plugins {
     `maven-publish`
 }
 
+version = project.findProperty("releaseVersion")?.toString() ?: "0.1.0"
+group = "org.iumotionlabs"
+
 repositories {
     mavenCentral()
 }
@@ -32,9 +35,6 @@ tasks.test {
 publishing {
     publications {
         create<MavenPublication>("maven") {
-            groupId = "io.ironcompress"
-            artifactId = "ironcompress"
-            version = project.findProperty("version")?.toString() ?: "0.1.0"
             from(components["java"])
 
             pom {
