@@ -38,7 +38,7 @@ jobs:
         run: cargo clippy -- -D warnings
 
       - name: Upload native library
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: native-lib
           path: rust/target/release/libironcompress.so
@@ -70,7 +70,7 @@ jobs:
         run: ./gradlew jar
 
       - name: Upload JAR
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ironcompress-jar
           path: java/build/libs/ironcompress.jar
