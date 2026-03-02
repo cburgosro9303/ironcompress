@@ -35,13 +35,13 @@ dependencies {
     implementation("com.github.luben:zstd-jni:1.5.7-7")
     implementation("com.aayushatharva.brotli4j:brotli4j:1.20.0")
     runtimeOnly("com.aayushatharva.brotli4j:native-${brotli4jPlatform()}:1.20.0")
-    implementation("org.tukaani:xz:1.11")
+    implementation("org.tukaani:xz:1.12")
     implementation("org.apache.commons:commons-compress:1.28.0")
     implementation("com.ning:compress-lzf:1.2.0")
 
     // Test
-    testImplementation("org.junit.jupiter:junit-jupiter:6.0.2")
-    testImplementation("org.junit.jupiter:junit-jupiter-params:6.0.2")
+    testImplementation("org.junit.jupiter:junit-jupiter:6.0.3")
+    testImplementation("org.junit.jupiter:junit-jupiter-params:6.0.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
